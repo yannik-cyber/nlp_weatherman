@@ -13,4 +13,8 @@ The chatbot can classify the following intents:
 - Bye
 - Unknown
 
+With our entity recognition, we can find out the requested location and time for the weather. 
+
+We use the Open Weather OneCall-API for getting the latest weather data (for every requested location).
+
 Our chatbot runs in discord (this enables interactive chats in a discord server).
