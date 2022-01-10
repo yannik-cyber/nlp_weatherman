@@ -13,7 +13,7 @@ The chatbot can classify the following intents:
 - Bye
 - Unknown
 
-With our entity recognition, we can find out the requested location and time for the weather. 
+With our entity recognition, we can find out the requested location and time of the weather question. 
 
 We use the Open Weather OneCall-API for getting the latest weather data (for every requested location).
 
