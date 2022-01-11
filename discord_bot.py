@@ -10,6 +10,13 @@ from torch.utils.data import TensorDataset, DataLoader, SequentialSampler
 import pandas as pd
 import numpy as np
 import os
+import json
+import requests
+import random
+from datetime import datetime
+import spacy
+
+from geopy.geocoders import Nominatim
 
 #-----
 #model
@@ -28,6 +35,7 @@ label_dict = {'bye': 0,
               'temperature': 8,
               'unknown': 9}
 
+
 label_dict_inverse = {v: k for k, v in label_dict.items()}
 
 bert = BertForSequenceClassification.from_pretrained("bert-base-uncased",
@@ -36,12 +44,18 @@ bert = BertForSequenceClassification.from_pretrained("bert-base-uncased",
                                                       output_hidden_states=False)
 dir_path = os.path.dirname(os.path.realpath(__file__))
 
-print(dir_path)
+#print(dir_path)
 bert.load_state_dict(torch.load(f'{dir_path}/BERT.model', map_location=torch.device('cpu')))
 
 tokenizer = BertTokenizer.from_pretrained('bert-base-uncased',
                                           do_lower_case=True)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+#-----------
+#entity recognition
+#-----------
+
+nlp = spacy.load("en_core_web_lg")
 
 #---------
 #functions
@@ -49,6 +63,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 def similarity(word, pattern):
     return difflib.SequenceMatcher(a=word.lower(), b=pattern.lower()).ratio()
+
 
 def get_intent(string):
     question = [string]
@@ -100,6 +115,150 @@ def get_intent(string):
     #print(type(prediction_flat[0]))
     return intent
 
+
+def entity_recognition(string):
+    doc = nlp(string)
+    location = ''
+    time = ''
+    for ent in doc.ents:
+        label = ent.label_
+        content = ent.text
+        if label == 'GPE':
+            location = content
+        elif label == 'DATE':
+            time = content
+    if location == '':
+        location = 'Mannheim'
+
+    return location, time
+
+
+def get_weather(city_name):
+  api_key = "1977d0c01a9cead345257efcc246e9ae"
+  part = 'minutely'
+
+  address = city_name
+  geolocator = Nominatim(user_agent="Your_Name")
+  location = geolocator.geocode(address)
+  lat = location.latitude
+  lon = location.longitude
+
+  response = requests.get(f'https://api.openweathermap.org/data/2.5/onecall?lat={lat}&lon={lon}&exclude={part}&appid={api_key}')
+  data = json.loads(response.text)
+  return data
+
+
+def get_general_weather(location, time):
+  if location == '':
+    city_name = 'Mannheim'
+  else:
+    city_name = location
+
+  weather = get_weather(city_name)
+  try:
+    alerts = weather ['alerts']
+  except KeyError:
+    alerts = ''
+
+  if time == '' or time == 'today':
+    data = weather['daily'][0]
+
+  elif time == 'tomorrow':
+    data = weather['daily'][1]
+
+  weather_data = {'temp_morn' : int(float(data['feels_like']['morn']) - 273.15),
+                  'temp_eve' : int(float(data['feels_like']['eve']) - 273.15),
+                  'temp_night' : int(float(data['feels_like']['night']) - 273.15),
+                  'temp_day' : int(float(data['temp']['day']) - 273.15),
+                  'temp_min' : int(float(data['temp']['min']) - 273.15),
+                  'temp_max' : int(float(data['temp']['max']) - 273.15),
+                  'temp_now': int(float(weather['current']['feels_like']) - 273.15),
+                  'rain_prob' : int(float(data['pop']) * 100),
+                  'clouds' : data['clouds'],
+                  'wind' : data['wind_speed']}
+
+  return weather_data, alerts
+
+
+def get_rain(location, time):
+    if location == '':
+        city_name = 'Mannheim'
+    else:
+        city_name = location
+
+    weather = get_weather(city_name)
+
+    if time == '' or time == 'current':
+        data = weather['current']
+        if "rain" in data:
+            rain = 'yes'
+            rain_prob = 100
+        else:
+            rain = 'no'
+            rain_prob = 0
+
+    elif time == 'today':
+        data = weather['hourly']
+
+        prob_list = []
+        hours = 7
+        for hour in range(hours):
+            prob = data[hour]['pop']
+            prob_list.append(int(prob * 100))
+
+        if (100 in prob_list):
+            rain = 'yes'
+            rain_prob = 100
+        else:
+            mean_prob = sum(prob_list) / len(prob_list)
+
+            if mean_prob < 33:
+                rain = 'no'
+                rain_prob = mean_prob
+            elif mean_prob >= 33 and mean_prob < 66:
+                rain = 'maybe'
+                rain_prob = mean_prob
+            elif mean_prob >= 66:
+                rain = 'yes'
+                rain_prob = mean_prob
+
+    elif time == 'tomorrow':
+        prob = weather['daily'][1]['pop']
+        if prob < 33:
+            rain = 'no'
+            rain_prob = prob
+        elif prob >= 33 and prob < 66:
+            rain = 'maybe'
+            rain_prob = prob
+        elif prob >= 66:
+            rain = 'yes'
+            rain_prob = prob
+
+    return rain, rain_prob
+
+
+def get_temperature(location, time):
+    if location == '':
+        city_name = 'Mannheim'
+
+    else:
+        city_name = location
+
+    weather = get_weather(city_name)
+
+    if time == '':
+        temp = int(weather['current']['temp'] - 273.15)
+
+    elif time == 'today':
+        temp = weather['daily'][0]['feels_like']
+
+    elif time == 'tomorrow':
+        temp = weather['daily'][1]['feels_like']
+
+    return temp
+
+
+
 #-----------
 #discord bot
 #-----------
@@ -131,7 +290,143 @@ async def on_message(message):
 
         intent = get_intent(content)
 
-        response = label_dict_inverse.get(intent)
+# intent: Bye
+        if intent == 0:
+            responses = ['Bye, have a nice day.',
+                         'Bye bye',
+                         'Farewell traveler.']
+            response = random.choice(responses)
+
+# intent cloud
+        elif intent == 1:
+            response = label_dict_inverse.get(intent)
+
+# intent  general_weather
+        elif intent == 2:
+            location, time = entity_recognition(content)
+            data, alerts = get_general_weather(location, time)
+            #response beginning
+            #temperature
+            string = f"{time} in {location} the temperature ranges between {data['temp_min']}°C and {data['temp_max']}°C."
+
+            if time == 'today':
+                string += f"Right now the temperature is {data['temp_now']}C°."
+
+            # cloudyness
+            string += f"\n{time} "
+            if data['clouds'] < 33:
+                string += f"it is sunny"
+            elif data['clouds'] >= 33 and data['clouds'] < 66:
+                string += f"it is partly sunny and cloudy"
+            else:
+                string += f"it is very cloudy"
+
+            # rain
+            string += f"\n Also the probability for rain is {data['rain_prob']}%, so "
+            if data['rain_prob'] < 33:
+                string += f"it will not rain {time}"
+            elif data['rain_prob'] >= 33 and data['rain_prob'] < 66:
+                string += f"it might rain {time}"
+            else:
+                string += f"it will rain {time}"
+            # wind
+            string += f"\nThe wind is {data['wind']} km/h fast."
+
+            response = string
+
+# intent good_bad
+        elif intent == 3:
+            response = label_dict_inverse.get(intent)
+
+# intent greeting
+        elif intent == 4:
+            responses = ['Hi there',
+                         'Hello',
+                         'Good day, sir.',
+                         'Hello, what can I do for you?',
+                         'Hey',
+                         'Salut',
+                         'Hello, my friend']
+            response = random.choice(responses)
+
+# intent rain
+        elif intent == 5:
+            location, time = entity_recognition(content)
+            rain, rain_prob = get_rain(location, time)
+
+            if rain == 'yes':
+                responses = [f'Yes, if you want to go outside {time}, you should take an umbrella.',
+                             f'Yes',
+                             f'Yes, the probability is {rain_prob}%'
+                             ]
+
+
+            elif rain == 'no':
+                responses = [f'No, it is not very likely. The probability for {time} is only {rain_prob}%',
+                             f'No',
+                             f'No, the probability is {rain_prob}%'
+                             ]
+
+            elif rain == 'maybe':
+                responses = [f'Maybe yes, maybe no. Could be both.',
+                             f'Maybe',
+                             f'It might rain {time}, the probability is {rain_prob}%'
+                            ]
+
+            response = random.choice(responses)
+
+
+# intent sun_hours
+        elif intent == 6:
+            response = label_dict_inverse.get(intent)
+
+# intent sunny
+        elif intent == 7:
+            response = label_dict_inverse.get(intent)
+
+# intent temperature
+        elif intent == 8:
+            location, time = entity_recognition(content)
+            temp = get_temperature(location, time)
+
+            if time == '':
+                responses = [f'Right now the temperature is {temp}C°',
+                             f'In {location} the temperature is {temp}C°',
+                             f'Outside it is {temp}C°']
+
+            elif time == 'today':
+                avg_temperature = int(((temp['morn'] - 273.15) + (temp['day'] - 273.15) + (temp['eve'] - 273.15) +
+                                       (temp['night'] - 273.15))/4)
+                temp_day =  int(temp['day'] - 273.15)
+                temp_morn =  int(temp['morn'] - 273.15)
+                temp_eve =  int(temp['eve'] - 273.15)
+                temp_night =  int(temp['night'] - 273.15)
+                responses = [f"Today the average temperature is {avg_temperature}C°",
+                             f"In the morning it is {temp_morn}C° \nDuring the day it is {temp_day}C° \n In the evening it is {temp_eve}C° \n In the night it is {temp_night}C°",
+                             f"Today the temperature will rise up to {temp_day}°C"]
+
+            elif time == 'tomorrow':
+                avg_temperature = int(((temp['morn'] - 273.15) + (temp['day'] - 273.15) + (temp['eve'] - 273.15) +
+                                       (temp['night'] - 273.15)) / 4)
+                temp_day = int(temp['day'] - 273.15)
+                temp_morn = int(temp['morn'] - 273.15)
+                temp_eve = int(temp['eve'] - 273.15)
+                temp_night = int(temp['night'] - 273.15)
+                responses = [f"Tomorrow the average temperature is {avg_temperature}C°",
+                             f"Tomorrow in the morning it will be {temp_morn}C° \nDuring the day it will be {temp_day}C° \n In the evening it will be {temp_eve}C° \n In the night it will be {temp_night}C°",
+                             f"Tomorrow the temperature will rise up to {temp_day}°C"]
+
+            response = random.choice(responses)
+
+# intent unknown
+        elif intent == 9:
+            responses = [f"{label_dict_inverse.get(intent)}, sorry can't help you!",
+                         f"Sorry, I don't know what you mean, please try again",
+                         f"BEEP BOOP, I am a robot and can tell you only about the weather",
+                         f"Help = No, Try again soon.",
+                         f"I don't really feel like answering you right now",
+                         f"Me and Google know everything, for this question you should consult Google."]
+            response = random.choice(responses)
 
         await channel.send(response)
 
