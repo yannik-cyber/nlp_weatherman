@@ -63,9 +63,6 @@ nlp = spacy.load("en_core_web_lg")
 #functions
 #---------
 
-def similarity(word, pattern):
-    return difflib.SequenceMatcher(a=word.lower(), b=pattern.lower()).ratio()
-
 
 def get_intent(string):
     question = [string]
@@ -336,12 +333,8 @@ async def on_message(message):
 
             response = string
 
-# intent good_bad
-        elif intent == 3:
-            response = label_dict_inverse.get(intent)
-
 # intent greeting
-        elif intent == 4:
+        elif intent == 3:
             responses = ['Hi there',
                          'Hello',
                          'Good day, sir.',
@@ -352,7 +345,7 @@ async def on_message(message):
             response = random.choice(responses)
 
 # intent rain
-        elif intent == 5:
+        elif intent == 4:
             location, time = entity_recognition(content)
             rain, rain_prob = get_rain(location, time)
 
@@ -377,17 +370,12 @@ async def on_message(message):
 
             response = random.choice(responses)
 
-
 # intent sun_hours
-        elif intent == 6:
-            response = label_dict_inverse.get(intent)
-
-# intent sunny
-        elif intent == 7:
+        elif intent == 5:
             response = label_dict_inverse.get(intent)
 
 # intent temperature
-        elif intent == 8:
+        elif intent == 6:
             location, time = entity_recognition(content)
             temp = get_temperature(location, time)
 
@@ -421,7 +409,7 @@ async def on_message(message):
             response = random.choice(responses)
 
 # intent unknown
-        elif intent == 9:
+        elif intent == 7:
             responses = [f"{label_dict_inverse.get(intent)}, sorry can't help you!",
                          f"Sorry, I don't know what you mean, please try again",
                          f"BEEP BOOP, I am a robot and can tell you only about the weather",
@@ -430,6 +418,13 @@ async def on_message(message):
                          f"Me and Google know everything, for this question you should consult Google."]
             response = random.choice(responses)
 
+# intent windy
+        elif intent == 8:
+            response = label_dict_inverse.get(intent)
+
         await channel.send(response)
+
+
+
 
 client.run(discord_token)
