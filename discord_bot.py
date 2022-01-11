@@ -248,8 +248,23 @@ def get_temperature(location, time):
 
     return temp
 
+def get_sun_hours(location, time):
+    if location == '':
+        city_name = 'Mannheim'
+    else:
+        city_name = location
 
-
+    weather = get_weather(city_name)
+    if time == '' or time == 'current':
+        sunrise = pd.to_datetime(int(weather['current']['sunrise']), unit='s')
+        sunset = pd.to_datetime(int(weather['current']['sunset']), unit='s')
+    elif time == 'today':
+        sunrise = pd.to_datetime(int(weather['daily'][0]['sunrise']), unit='s')
+        sunset = pd.to_datetime(int(weather['daily'][0]['sunset']), unit='s')
+    elif time == 'tomorrow':
+        sunrise = pd.to_datetime(int(weather['daily'][1]['sunrise']), unit='s')
+        sunset = pd.to_datetime(int(weather['daily'][1]['sunset']), unit='s')
+    return sunrise, sunset, city_name
 #-----------
 #discord bot
 #-----------
@@ -290,7 +305,26 @@ async def on_message(message):
 
 # intent cloud
         elif intent == 1:
-            response = label_dict_inverse.get(intent)
+            location, time = entity_recognition(content)
+
+            data, alerts = get_general_weather(location, time)
+            if data['clouds'] < 33:
+                responses = [f'It is sunny',
+                             f'Take you sunglasses out. It is blue sky',
+                             f'The sky is blue.'
+                             ]
+            elif data['clouds'] >= 33 and data['clouds'] < 66:
+                responses = [f'A little bit from both sides.',
+                             f'Partly sunny, partly cloudy.',
+                             f'Not really sunny but not really cloudy either.'
+                             ]
+            else:
+                responses = [f'No sun today.',
+                             f'Clouds, clouds and more clouds.',
+                             f'It is super cloudy.'
+                             ]
+
+            response = random.choice(responses)
 
 # intent  general_weather
         elif intent == 2:
@@ -364,7 +398,13 @@ async def on_message(message):
 
 # intent sun_hours
         elif intent == 5:
-            response = label_dict_inverse.get(intent)
+            location, time = entity_recognition(content)
+            sunrise, sunset, city_name = get_sun_hours(location, time)
+            #print(sunrise)
+            #print(sunset)
+            sunrise = str(sunrise)[11:]
+            sunset = str(sunset)[11:]
+            response = f'Sunrise: {sunrise} & Sunset: {sunset}'
 
 # intent temperature
         elif intent == 6:
@@ -412,7 +452,25 @@ async def on_message(message):
 
 # intent windy
         elif intent == 8:
-            response = label_dict_inverse.get(intent)
+            location, time = entity_recognition(content)
+            data, alerts = get_general_weather(location, time)
+            wind = data['wind']
+            print(wind)
+            if wind <= 3:
+                responses = [f'There is no wind. The wind speed is {wind}km/h',
+                             f'No wind.',
+                             f'There is no wind.']
+            elif wind <= 10:
+                responses = [f'It is a soft breeze. The wind speed is {wind}km/h',
+                             f'There is a soft breeze.',
+                             f'A nice chilly breeze outside']
+
+            elif wind > 10:
+                responses = [f'It is windy. The wind speed is {wind}km/h.',
+                             f'It is a little windy',
+                             f'Maybe a hurrican.']
+
+            response = random.choice(responses)
 
         await channel.send(response)
 
