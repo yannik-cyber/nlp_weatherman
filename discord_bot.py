@@ -24,16 +24,8 @@ from geopy.geocoders import Nominatim
 
 print('get the model ready...')
 
-label_dict = {'bye': 0,
-              'cloud': 1,
-              'general_weather': 2,
-              'good_bad': 3,
-              'greeting': 4,
-              'rain': 5,
-              'sun_hours': 6,
-              'sunny': 7,
-              'temperature': 8,
-              'unknown': 9}
+label_dict = {'bye': 0, 'cloud': 1, 'general_weather': 2, 'greeting': 3, 'rain': 4, 'sun_hours': 5, 'temperature': 6, 'unknown': 7, 'wind': 8}
+
 
 
 label_dict_inverse = {v: k for k, v in label_dict.items()}
