@@ -45,11 +45,13 @@ bert = BertForSequenceClassification.from_pretrained("bert-base-uncased",
 dir_path = os.path.dirname(os.path.realpath(__file__))
 
 #print(dir_path)
-bert.load_state_dict(torch.load(f'{dir_path}/BERT.model', map_location=torch.device('cpu')))
+device_location = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+bert.load_state_dict(torch.load(f'{dir_path}/BERT.model', map_location=torch.device(device_location)))
 
 tokenizer = BertTokenizer.from_pretrained('bert-base-uncased',
                                           do_lower_case=True)
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device(device_location)
 
 #-----------
 #entity recognition
