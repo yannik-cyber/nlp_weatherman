@@ -1,5 +1,7 @@
 # nlp_weatherman
 
+discord server-invite link: https://discord.gg/fAt2BBXm (valid for 7 days)
+
 We develop a weather chatbot with NLP which can answer your wheather questions.
 
 The chatbot can classify the following intents:
