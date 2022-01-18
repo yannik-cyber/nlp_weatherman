@@ -2,6 +2,10 @@
 
 discord server-invite link: https://discord.gg/fAt2BBXm (valid for 7 days)
 
+Modellfile: https://we.tl/t-3dVNurj1Ib (also valid for 7 days) Put this file into the directory of discord_bot.py
+
+If it doesn't work anymore please contact us.
+
 We develop a weather chatbot with NLP which can answer your wheather questions.
 
 The chatbot can classify the following intents:
